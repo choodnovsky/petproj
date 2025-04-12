@@ -1,0 +1,10 @@
+minio/
+upload_ch
+upload_pg
+venv
+vectordb
+app_run.sh
+config.ini
+.env
+.DS_Store
+.idea

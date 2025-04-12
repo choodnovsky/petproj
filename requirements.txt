@@ -1,0 +1,6 @@
+chromadb
+langchain
+tqdm
+unstructured
+sentence-transformers
+requests

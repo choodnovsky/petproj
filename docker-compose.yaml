@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./upload_pg:/upload_pg
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dvdrental || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 4G
+    networks:
+      - app_network
+
+###########################################################################################
+#  click_server:
+#    image: clickhouse/clickhouse-server
+#    container_name: clickhouse_server
+#    restart: always
+#    env_file:
+#      - .env
+#    ports:
+#      - "8123:8123"
+#      - "9000:9000"
+#    ulimits:
+#      nofile:
+#        soft: 262144
+#        hard: 262144
+#    volumes:
+#      - ./upload_ch:/upload_ch
+#      - clickhouse_data:/var/lib/clickhouse
+#    healthcheck:
+#      test: [ "CMD", "curl", "-f", "http://localhost:8123" ]
+#      interval: 10s
+#      retries: 5
+#    networks:
+#      - app_network
+
+###########################################################################################
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - app_network
+
+###########################################################################################
+  chroma:
+    image: chromadb/chroma
+    container_name: chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+      - ./chroma:/chroma_data
+    networks:
+      - app_network
+
+###########################################################################################
+#  minio:
+#    image: docker.io/bitnami/minio:2023
+#    ports:
+#      - '9002:9000'
+#      - '9001:9001'
+#    env_file:
+#      - .env
+#    volumes:
+#      - ./minio:/data
+#    networks:
+#      - app_networ
+
+
+
+###########################################################################################
+#  streamlit:
+#    build:
+#      context: ./streamlit
+#      dockerfile: Dockerfile
+#    container_name: streamlit
+#    restart: always
+#    ports:
+#      - "8501:8501"
+#    depends_on:
+#      - postgres
+#      - click_server  # Исправлено
+#    networks:
+#      - app_network
+
+
+###########################################################################################
+
+#  llama_training:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    container_name: llama_training
+#    ports:
+#      - "8001:8001"
+#    networks:
+#      - app_network
+#    volumes:
+#      - ./data:/app/data
+#      - ./lora_output:/app/lora_output
+
+
+volumes:
+  postgres_data:
+#  clickhouse_data:
+  ollama_data:
+  chroma_data:
+
+
+networks:
+  app_network:
+    driver: bridge
