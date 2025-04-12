@@ -5,7 +5,7 @@ import argparse
 import ollama
 
 
-def query_chromadb(question: str, top_k: int = 7):
+def query_chromadb(question: str, top_k: int = 4):
     # Подключение к Chroma
     client = chromadb.HttpClient(host="localhost", port=8000)
     collection = client.get_collection("lotr")
@@ -45,7 +45,7 @@ def query_chromadb(question: str, top_k: int = 7):
 
     print("🤖 Запрашиваем ответ у модели...\n")
     response = ollama.chat(
-        model="llama3",
+        model="llama3", #deepseek-r1 llama3
         messages=[
             {"role": "user", "content": prompt}
         ]

@@ -66,6 +66,7 @@ services:
     container_name: chromadb
     ports:
       - "8000:8000"
+    restart: always
     volumes:
       - chroma_data:/chroma/chroma
       - ./chroma:/chroma_data
@@ -102,22 +103,7 @@ services:
 #    networks:
 #      - app_network
 
-
 ###########################################################################################
-
-#  llama_training:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#    container_name: llama_training
-#    ports:
-#      - "8001:8001"
-#    networks:
-#      - app_network
-#    volumes:
-#      - ./data:/app/data
-#      - ./lora_output:/app/lora_output
-
 
 volumes:
   postgres_data:

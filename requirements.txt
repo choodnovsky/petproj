@@ -4,3 +4,4 @@ tqdm
 unstructured
 sentence-transformers
 requests
+peft
