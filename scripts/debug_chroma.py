@@ -7,9 +7,9 @@ print("🔍 Коллекции:")
 for c in collections:
     print("-", c.name)
 
-print("\n📄 Документы в коллекции 'lotr':")
-collection = client.get_collection("lotr")
+print("\n📄 Документы в коллекции 'wiki_docs':")
+collection = client.get_collection("wiki_docs")
 results = collection.get(include=["documents"])  # Убрали "ids"
 
 for i, doc in enumerate(results["documents"]):
-    print(f"\n🧱 chunk_{i}:\n{doc[:200]}...")
+    print(f"\n🧱 chunk_{i}:\n{doc[:500]}...")

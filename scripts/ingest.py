@@ -5,6 +5,11 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 import os
 
+# with open("data/lotr.txt", "r+", encoding="utf-8") as f:
+#     lines = f.readlines()
+#     f.seek(0)
+#     f.writelines([line for line in lines if line.strip() != ""])
+#     f.truncate()
 
 def clean_text(text: str) -> str:
     lines = text.splitlines()
