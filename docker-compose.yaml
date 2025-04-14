@@ -1,28 +1,28 @@
 services:
-  postgres:
-    image: postgres:15
-    container_name: postgres
-    env_file:
-      - .env
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./upload_pg:/upload_pg
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d dvdrental || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    restart: always
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 4G
-    networks:
-      - app_network
+#  postgres:
+#    image: postgres:15
+#    container_name: postgres
+#    env_file:
+#      - .env
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - ./upload_pg:/upload_pg
+#      - postgres_data:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U postgres -d dvdrental || exit 1"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#      start_period: 10s
+#    restart: always
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '1'
+#          memory: 4G
+#    networks:
+#      - app_network
 
 ###########################################################################################
 #  click_server:
@@ -98,14 +98,14 @@ services:
 #      - "8501:8501"
 #    depends_on:
 #      - postgres
-#      - click_server  # Исправлено
+#      - click_server
 #    networks:
 #      - app_network
 
 ###########################################################################################
 
 volumes:
-  postgres_data:
+#  postgres_data:
 #  clickhouse_data:
   ollama_data:
   chroma_data:
