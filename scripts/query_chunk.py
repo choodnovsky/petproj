@@ -23,7 +23,7 @@ def update_context(question, answer):
 
 
 # Запрос в ChromaDB
-def query_chromadb(collection: str, question: str, top_k: int = 4):
+def query_chromadb(collection: str, question: str, top_k: int = 8):
     # Подключение к Chroma
     client = chromadb.HttpClient(host="localhost", port=8000)
     collection = client.get_collection(collection)
@@ -42,20 +42,20 @@ def query_chromadb(collection: str, question: str, top_k: int = 4):
 
     # Проверка, что результаты не пустые
     if not results or "documents" not in results or not results["documents"]:
-        print("⚠️ Нет релевантных документов.")
+        print("Нет релевантных документов.")
         return
 
     documents = results["documents"][0]
     distances = results.get("distances", [None])[0]
 
-    print(f"📚 Найдено {len(documents)} релевантных фрагментов\n")
+    print(f"Найдено {len(documents)} релевантных фрагментов\n")
 
     # Объединяем все чанки в один контекст
-    print("🧩 Собираем контекст...")
+    print("Собираем контекст...")
     context_parts = []
     for i, doc in tqdm(enumerate(documents)):
         distance = distances[i] if distances else "N/A"
-        print(f"🔹 Чанк #{i + 1} (расстояние: {distance}):\n{doc}\n")
+        print(f"Чанк #{i + 1} (расстояние: {distance}):\n{doc}\n")
         context_parts.append(doc.strip())
 
     global context
@@ -74,7 +74,7 @@ def query_with_thought_chain(question):
     Ответ (с пояснением):
     """
 
-    print("\n🤖 Запрашиваем ответ у модели...\n")
+    print("\nЗапрашиваем ответ у модели...\n")
     response = ollama.chat(
         model="llama3",  # Используем модель LLaMA3
         messages=[{"role": "user", "content": prompt}]

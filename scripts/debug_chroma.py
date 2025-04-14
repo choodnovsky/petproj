@@ -3,6 +3,9 @@ import chromadb
 client = chromadb.HttpClient(host="localhost", port=8000)
 
 collections = client.list_collections()
+cllist =[c.name for c in  collections]
+print(cllist)
+
 print("🔍 Коллекции:")
 for c in collections:
     print("-", c.name)

@@ -18,17 +18,17 @@ def clean_text(text: str) -> str:
 
 def main(file_path: str):
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"❌ Файл не найден: {file_path}")
+        raise FileNotFoundError(f"Файл не найден: {file_path}")
 
     with open(file_path, "r", encoding="utf-8") as f:
         text = clean_text(f.read())
 
-    print(f"📖 Загружен файл: {file_path}")
-    print(f"📏 Размер текста: {len(text)} символов")
+    print(f"Загружен файл: {file_path}")
+    print(f"Размер текста: {len(text)} символов")
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = splitter.split_text(text)
-    print(f"✂️  Разбито на {len(chunks)} чанков")
+    print(f"Разбито на {len(chunks)} чанков")
 
     model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = model.encode(chunks, show_progress_bar=True)
@@ -36,7 +36,7 @@ def main(file_path: str):
     client = chromadb.HttpClient(host="localhost", port=8000)
     collection = client.get_or_create_collection("lotr")
 
-    print(f"📦 Загружаем чанки в ChromaDB...")
+    print(f"Загружаем чанки в ChromaDB...")
     for i, (chunk, emb) in tqdm(enumerate(zip(chunks, embeddings)), total=len(chunks)):
         collection.add(
             documents=[chunk],
@@ -45,7 +45,7 @@ def main(file_path: str):
             metadatas=[{"source": os.path.basename(file_path), "index": i}]
         )
 
-    print("✅ Готово! Векторы успешно загружены в коллекцию 'lotr'")
+    print("Готово! Векторы успешно загружены в коллекцию 'lotr'")
 
 
 if __name__ == "__main__":

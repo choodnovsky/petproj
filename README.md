@@ -178,7 +178,7 @@ print(response)
 подбора контекста. Мы можем включить эти данные как дополнительный контекст или даже напрямую использовать для улучшения ответов.
 ----
 🧱 Шаг 1: Сбор данных  
-Собери всё, что есть из вики, в одну папку, например ./data/wiki/.  
+Собрать всё, что есть из вики, в одну папку, например ./data/wiki/.  
 Формат файлов: .txt, .md, .docx, .pdf — всё подходит. Чем чище, тем лучше.   
 
 🧹 Шаг 2: Разбиение на чанки  
@@ -210,6 +210,8 @@ def load_and_index_files(folder_path):
 # Загрузка
 load_and_index_files("./data/wiki/")
 ```
+📦 Шаг 5: Подтянуть в контекст правильные ответы  
+
 ✅ Cкрипт для загрузки корпоративной вики в ChromaDB  
 ```angular2html
 import os
@@ -238,15 +240,15 @@ try:
     actual_dim = embed_model.get_sentence_embedding_dimension()
 
     if expected_dim and actual_dim != expected_dim:
-        print(f"⚠️ Размерность модели ({actual_dim}) не совпадает с размерностью коллекции ({expected_dim})")
-        print("🔁 Удаляем и пересоздаём коллекцию...")
+        print(f"Размерность модели ({actual_dim}) не совпадает с размерностью коллекции ({expected_dim})")
+        print("Удаляем и пересоздаём коллекцию...")
         client.delete_collection(collection_name)
         collection = client.create_collection(collection_name)
     else:
-        print("✅ Размерность эмбеддингов совпадает или коллекция ещё не существует")
+        print("Размерность эмбеддингов совпадает или коллекция ещё не существует")
 
 except chromadb.errors.NotFoundError:
-    print("📁 Коллекция не найдена — создаём новую")
+    print("Коллекция не найдена — создаём новую")
     collection = client.create_collection(collection_name)
 
 
@@ -255,7 +257,7 @@ def split_text(text):
     return text_splitter.split_text(text)
 
 def add_to_chroma(docs, source_name):
-    print(f"🔹 Добавляем {len(docs)} чанков из {source_name}")
+    print(f"Добавляем {len(docs)} чанков из {source_name}")
     for i, doc in tqdm(enumerate(docs), total=len(docs), desc=f"📥 {source_name}"):
         embedding = embed_model.encode(doc).tolist()
         collection.add(
@@ -273,15 +275,15 @@ def load_and_index_files(folder_path="../data/wiki/"):
                 text = f.read()
                 chunks = split_text(text)
                 add_to_chroma(chunks, filename)
-                print(f"✅ Загружено: {filename} ({len(chunks)} чанков)")
+                print(f"Загружено: {filename} ({len(chunks)} чанков)")
         else:
-            print(f"⚠️ Пропущен (неподдерживаемый формат): {filename}")
+            print(f"Пропущен (неподдерживаемый формат): {filename}")
 
 
 # 🔹 Точка входа
 if __name__ == "__main__":
     load_and_index_files()
-    print("✅ Индексация завершена!")
+    print("Индексация завершена!")
 ```
 ✅ Cкрипт для получения ответов от модели
 ```angular2html
@@ -329,7 +331,7 @@ def query_chromadb(collection: str, question: str, top_k: int = 4):
 
     # Проверка, что результаты не пустые
     if not results or "documents" not in results or not results["documents"]:
-        print("⚠️ Нет релевантных документов.")
+        print("Нет релевантных документов.")
         return
 
     documents = results["documents"][0]
@@ -338,11 +340,11 @@ def query_chromadb(collection: str, question: str, top_k: int = 4):
     print(f"📚 Найдено {len(documents)} релевантных фрагментов\n")
 
     # Объединяем все чанки в один контекст
-    print("🧩 Собираем контекст...")
+    print("Собираем контекст...")
     context_parts = []
     for i, doc in tqdm(enumerate(documents)):
         distance = distances[i] if distances else "N/A"
-        print(f"🔹 Чанк #{i + 1} (расстояние: {distance}):\n{doc}\n")
+        print(f"Чанк #{i + 1} (расстояние: {distance}):\n{doc}\n")
         context_parts.append(doc.strip())
 
     global context
@@ -361,7 +363,7 @@ def query_with_thought_chain(question):
     Ответ (с пояснением):
     """
 
-    print("\n🤖 Запрашиваем ответ у модели...\n")
+    print("\nЗапрашиваем ответ у модели...\n")
     response = ollama.chat(
         model="llama3",  # Используем модель LLaMA3
         messages=[{"role": "user", "content": prompt}]
@@ -405,6 +407,6 @@ if __name__ == "__main__":
     # Теперь задаем вопрос с учетом всего контекста
     answer = query_with_thought_chain(args.question)
 
-    print("📝 Ответ модели:")
+    print("Ответ модели:")
     print(answer)
 ```

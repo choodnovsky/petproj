@@ -8,3 +8,4 @@ config.ini
 .env
 .DS_Store
 .idea
+streamlit/encrypted_cookie_manager.py

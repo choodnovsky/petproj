@@ -1,0 +1,10 @@
+streamlit==1.35.0
+redis==5.0.8
+openpyxl
+PyYAML
+XlsxWriter
+streamlit_option_menu==0.3.13
+streamlit-pydantic==0.6.0
+streamlit-cookies-manager==0.2.0
+pyperclip==1.9.0
+python-dotenv==1.0.1
