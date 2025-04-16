@@ -6,13 +6,13 @@ collections = client.list_collections()
 cllist =[c.name for c in  collections]
 print(cllist)
 
-print("🔍 Коллекции:")
+print("Коллекции:")
 for c in collections:
     print("-", c.name)
 
-print("\n📄 Документы в коллекции 'wiki_docs':")
+print("\nДокументы в коллекции 'wiki_docs':")
 collection = client.get_collection("wiki_docs")
-results = collection.get(include=["documents"])  # Убрали "ids"
+results = collection.get(include=["documents"])
 
 for i, doc in enumerate(results["documents"]):
-    print(f"\n🧱 chunk_{i}:\n{doc[:500]}...")
+    print(f"\nchunk_{i}:\n{doc[:500]}...")

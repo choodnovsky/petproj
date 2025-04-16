@@ -9,3 +9,7 @@ config.ini
 .DS_Store
 .idea
 streamlit/encrypted_cookie_manager.py
+scripts/ingest.py
+scripts/query_chunk.py
+streamlit/app/__pycache__/
+data/lotr.txt

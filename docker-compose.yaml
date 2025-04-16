@@ -86,27 +86,43 @@ services:
 #      - app_networ
 
 
-
 ###########################################################################################
-#  streamlit:
-#    build:
-#      context: ./streamlit
-#      dockerfile: Dockerfile
-#    container_name: streamlit
-#    restart: always
-#    ports:
-#      - "8501:8501"
+  streamlit:
+    build:
+      context: ./streamlit
+      dockerfile: Dockerfile
+    container_name: streamlit
+    volumes:
+      - ./streamlit/app:/usr/src/app           # код проекта на локалке
+      - ./data:/usr/src/data         # лог-файлы и context_memory.txt
+    restart: always
+    ports:
+      - "8501:8501"
 #    depends_on:
+#      - chromadb
+#      - ollama
 #      - postgres
 #      - click_server
-#    networks:
-#      - app_network
+    networks:
+      - app_network
 
 ###########################################################################################
+
+  redis:
+    image: redis:alpine
+    container_name: redis_container
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+    networks:
+      - app_network
 
 volumes:
 #  postgres_data:
 #  clickhouse_data:
+  redis_data:
   ollama_data:
   chroma_data:
 

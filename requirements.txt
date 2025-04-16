@@ -4,5 +4,4 @@ tqdm
 unstructured
 sentence-transformers
 requests
-speft
 deprecated
