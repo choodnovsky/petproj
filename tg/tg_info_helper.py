@@ -29,7 +29,9 @@ chroma = chromadb.HttpClient(
 )
 collection = chroma.get_collection("wiki_docs")
 
-ollama = Client(host=f'http://{parser.get("OLLAMA", "HOST")}:{parser.get("OLLAMA", "PORT")}')
+ollama = Client(
+    host=f'http://{parser.get("OLLAMA", "HOST")}:{parser.get("OLLAMA", "PORT")}'
+)
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # === Утилиты ===
