@@ -1,6 +1,6 @@
 import streamlit as st
 import json
-import os
+import redis
 from sentence_transformers import SentenceTransformer
 import chromadb
 from ollama import Client
@@ -10,9 +10,8 @@ from configparser import ConfigParser
 parser = ConfigParser()
 parser.read("config.ini")
 
-# Пути к файлам
-CONTEXT_FILE = "/usr/src/data/context_memory.txt"
-CHAT_LOG_FILE = "/usr/src/data/chat_log.jsonl"
+# Подключение к Redis
+redis_client = redis.Redis(host=parser.get("REDIS", "HOST"), port=int(parser.get("REDIS", "PORT")), decode_responses=True)
 
 # Подключение к Ollama
 ollama = Client(host='http://ollama:11434')
@@ -22,7 +21,6 @@ client = chromadb.HttpClient(
     host=parser.get("CHROMADB", "HOST"),
     port=int(parser.get("CHROMADB", "PORT")),
 )
-
 collection = client.get_collection("wiki_docs")
 
 # Модель эмбеддингов
@@ -40,30 +38,36 @@ def query_chromadb(question, top_k=4):
     documents = results["documents"][0] if results and results["documents"] else []
     return "\n".join(documents)
 
-def save_context_to_file(context_text):
-    os.makedirs(os.path.dirname(CONTEXT_FILE), exist_ok=True)
-    with open(CONTEXT_FILE, "a", encoding="utf-8") as f:
-        f.write(context_text + "\n---\n")
+def save_context_to_redis(context_text):
+    redis_client.rpush("context_memory", context_text)
 
 def load_full_context():
-    if os.path.exists(CONTEXT_FILE):
-        with open(CONTEXT_FILE, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
-
-def save_chat_log(question, answer):
-    os.makedirs(os.path.dirname(CHAT_LOG_FILE), exist_ok=True)
-    log_entry = {"question": question, "answer": answer}
-    with open(CHAT_LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    return "\n---\n".join(redis_client.lrange("context_memory", 0, -1))
 
 def clear_memory():
-    if os.path.exists(CONTEXT_FILE):
-        os.remove(CONTEXT_FILE)
-    if os.path.exists(CHAT_LOG_FILE):
-        os.remove(CHAT_LOG_FILE)
+    redis_client.delete("context_memory")
+    keys = redis_client.keys("chatlog:*")
+    for key in keys:
+        redis_client.delete(key)
     st.session_state.chat_history = []
     st.session_state.show_fix_input = False
+
+def save_chat_log(question, answer, rating=5, feedback=None):
+    log_entry = {
+        "question": question,
+        "answer": answer,
+        "rating": rating,
+    }
+    if feedback:
+        log_entry["feedback"] = feedback
+
+    redis_key = f"chatlog:{question[:100]}"
+    redis_value = json.dumps(log_entry, ensure_ascii=False)
+    redis_client.set(redis_key, redis_value)
+
+    if rating >= 4:
+        context_block = f"[Оценка: {rating}] Ответ: {answer}"
+        save_context_to_redis(context_block)
 
 # === Основная логика ===
 
@@ -84,7 +88,6 @@ def info_helper():
             clear_memory()
             st.success("Память полностью очищена.")
         else:
-            # Показываем вопрос
             with st.chat_message("user"):
                 st.markdown(user_input)
 
@@ -97,10 +100,22 @@ def info_helper():
                 {
                     "role": "system",
                     "content": (
-                        "Ты корпоративный помощник. Всегда отвечай на русском языке. "
-                        "Используй цепочку размышлений. Используй информацию из прошлых взаимодействий.\n\n"
-                        f"Исторический контекст:\n{full_context}"
+                        "Ты корпоративный помощник, общающийся строго на русском языке. "
+                        "Отвечай только на основе предоставленного контекста и предыдущих взаимодействий. "
+                        "Если в базе нет информации для ответа — прямо скажи об этом, не выдумывай."
                     )
+                },
+                {
+                    "role": "user",
+                    "content": f"Вот подтверждённые факты, сохранённые в памяти:\n{full_context}"
+                },
+                {
+                    "role": "user",
+                    "content": f"А вот факты, извлечённые из базы знаний по текущему вопросу:\n{new_context}"
+                },
+                {
+                    "role": "user",
+                    "content": user_input
                 }
             ] + st.session_state.chat_history
 
@@ -110,13 +125,12 @@ def info_helper():
             st.session_state.chat_history.append({
                 "role": "assistant",
                 "raw_content": raw_answer,
-                "content": raw_answer + "\n\n_Если ответ кажется неточным, нажмите 'Исправить' ниже. Я учту это в будущем._"
+                "content": raw_answer
             })
 
             with st.chat_message("assistant"):
-                st.markdown(st.session_state.chat_history[-1]["content"])
+                st.markdown(raw_answer)
 
-    # Отображаем историю
     for i, msg in enumerate(st.session_state.chat_history):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -127,23 +141,18 @@ def info_helper():
                     if st.button("OK", key=f"ok_{i}"):
                         question = st.session_state.chat_history[i - 1]["content"]
                         answer = msg["raw_content"]
-                        save_context_to_file(answer)
-                        save_chat_log(question, answer)
+                        save_chat_log(question, answer, rating=5)
                         st.success("Ответ подтверждён и добавлен в память.")
 
                 with col2:
-                    if st.button("Исправить", key=f"fix_{i}"):
-                        st.session_state.show_fix_input = True
+                    st.markdown("### Оценка:")
+                    score = st.slider("Насколько полезен ответ?", 1, 5, 5, key=f"rating_{i}")
+                    feedback = None
+                    if score < 4:
+                        feedback = st.text_area("Что было не так?", key=f"feedback_{i}")
 
-                if st.session_state.show_fix_input:
-                    fixed = st.text_area("Введите исправленный ответ", key=f"fix_text_{i}")
-                    if st.button("💾 Сохранить исправление", key=f"save_fix_{i}"):
-                        st.session_state.chat_history[i]["raw_content"] = fixed
-                        st.session_state.chat_history[i]["content"] = (
-                            fixed + "\n\n_Если ответ кажется неточным, нажмите 'Исправить' ниже. Я учту это в будущем._"
-                        )
+                    if st.button("📎 Сохранить оценку", key=f"confirm_rating_{i}"):
                         question = st.session_state.chat_history[i - 1]["content"]
-                        save_context_to_file(fixed)
-                        save_chat_log(question, fixed)
-                        st.success("Исправление сохранено.")
-                        st.session_state.show_fix_input = False
+                        answer = msg["raw_content"]
+                        save_chat_log(question, answer, rating=score, feedback=feedback)
+                        st.success("Оценка сохранена.")

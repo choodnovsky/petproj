@@ -5,3 +5,4 @@ unstructured
 sentence-transformers
 requests
 deprecated
+python-telegram-bot

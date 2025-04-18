@@ -13,3 +13,4 @@ scripts/ingest.py
 scripts/query_chunk.py
 streamlit/app/__pycache__/
 data/lotr.txt
+streamlit/
