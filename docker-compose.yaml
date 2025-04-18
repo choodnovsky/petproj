@@ -10,7 +10,6 @@ services:
     networks:
       - app_network
 
-###########################################################################################
   chroma:
     image: chromadb/chroma
     container_name: chromadb
@@ -37,7 +36,6 @@ volumes:
   redis_data:
   ollama_data:
   chroma_data:
-
 
 networks:
   app_network:
