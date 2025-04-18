@@ -89,9 +89,9 @@ def add_to_chroma(docs, source_name):
 def load_and_index_files(folder_path):
     files = [f for f in os.listdir(folder_path) if f.endswith((".txt", ".md"))]
 
-    for filename in tqdm(files, desc="📄 Индексация файлов"):
+    for filename in tqdm(files, desc="Индексация файлов"):
         if is_file_already_indexed(filename):
-            logging.info(f"⏭️ Пропущен (уже в базе): {filename}")
+            logging.info(f"Пропущен (уже в базе): {filename}")
             continue
 
         filepath = os.path.join(folder_path, filename)
@@ -102,9 +102,9 @@ def load_and_index_files(folder_path):
 
                 if chunks:
                     add_to_chroma(chunks, filename)
-                    logging.info(f"✅ Загружено: {filename} ({len(chunks)} чанков)")
+                    logging.info(f"Загружено: {filename} ({len(chunks)} чанков)")
                 else:
-                    logging.warning(f"⚠️ Пустой или короткий файл: {filename}")
+                    logging.warning(f"Пустой или короткий файл: {filename}")
 
         except Exception as e:
             logging.error(f"Ошибка при обработке {filename}: {e}")
@@ -113,4 +113,4 @@ def load_and_index_files(folder_path):
 # Точка входа
 if __name__ == "__main__":
     load_and_index_files(FOLDER_PATH)
-    logging.info("🎉 Индексация завершена.")
+    logging.info("Индексация завершена.")
