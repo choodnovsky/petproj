@@ -1,19 +1,14 @@
-import json
-import redis
-from datetime import datetime, timezone
-
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import (
-    ApplicationBuilder, ContextTypes, CommandHandler,
-    MessageHandler, CallbackQueryHandler, filters
-)
-
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from sentence_transformers import SentenceTransformer
 import chromadb
 from ollama import Client
 from configparser import ConfigParser
+import redis
+from datetime import datetime, timezone
+import json
 
-# === Конфигурация ===
+# === Настройка ===
 parser = ConfigParser()
 parser.read("config.ini")
 
@@ -35,7 +30,6 @@ ollama = Client(
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # === Утилиты ===
-
 def query_chromadb(question, top_k=4):
     embedding = model.encode([question])[0].tolist()
     results = collection.query(query_embeddings=[embedding], n_results=top_k, include=["documents"])
@@ -51,9 +45,10 @@ def load_full_context():
 def clear_memory():
     redis_client.delete("context_memory")
 
-def save_chat_log(question, answer, rating=5, feedback=None, user_id=None):
+def save_chat_log(question, answer, rating=5, feedback=None, user_id=None, username=None):
     log_entry = {
         "user_id": user_id,
+        "username": username,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "question": question,
         "answer": answer,
@@ -68,6 +63,8 @@ def save_chat_log(question, answer, rating=5, feedback=None, user_id=None):
         save_context_to_redis(f"[Оценка: {rating}] Ответ: {answer}")
 
 # === Telegram Bot ===
+def is_new_question(message):
+    return message.reply_to_message is None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Я информационный помощник, спрашивай 📚")
@@ -76,48 +73,54 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_memory()
     await update.message.reply_text("Память очищена.")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_input = update.message.text
-    chat_id = update.message.chat_id
-    user_id = update.message.from_user.id
+async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    user_input = message.text
 
-    if user_input.strip().lower() == "/clear":
-        await clear(update, context)
-        return
+    # Новый вопрос (без реплая)
+    if is_new_question(message):
+        processing_msg = await message.reply_text("Обрабатываю вопрос...", reply_to_message_id=message.message_id)
 
-    await update.message.reply_text("Обрабатываю вопрос...")
+        new_context = query_chromadb(user_input)
+        full_context = load_full_context()
 
-    new_context = query_chromadb(user_input)
-    full_context = load_full_context()
+        messages = [
+            {"role": "system", "content": "Ты корпоративный помощник, общающийся строго на русском языке. Отвечай только на основе предоставленного контекста."},
+            {"role": "user", "content": f"Вот подтверждённые факты:\n{full_context}"},
+            {"role": "user", "content": f"Вот факты по вопросу:\n{new_context}"},
+            {"role": "user", "content": user_input},
+        ]
 
-    messages = [
-        {"role": "system", "content": "Ты корпоративный помощник, общающийся строго на русском языке. Отвечай только на основе предоставленного контекста."},
-        {"role": "user", "content": f"Вот подтверждённые факты:\n{full_context}"},
-        {"role": "user", "content": f"Вот факты по вопросу:\n{new_context}"},
-        {"role": "user", "content": user_input},
-    ]
+        response = ollama.chat(model="gemma:2b", messages=messages)
+        answer = response["message"]["content"]
 
-    response = ollama.chat(
-        # model="llama3",
-        model="gemma:2b",
-        messages=messages)
-    answer = response["message"]["content"]
+        context.user_data.update({
+            "last_question": user_input,
+            "last_answer": answer,
+            "user_id": message.from_user.id,
+            "username": message.from_user.full_name or message.from_user.username,
+            "state": "awaiting_rating"
+        })
 
-    context.user_data["last_question"] = user_input
-    context.user_data["last_answer"] = answer
+        reply_msg = await message.reply_text(answer, reply_to_message_id=message.message_id)
 
-    await update.message.reply_text(answer)
-
-    keyboard = [
-        [
+        keyboard = [[
             InlineKeyboardButton("⭐ 1", callback_data="rate_1"),
             InlineKeyboardButton("⭐ 2", callback_data="rate_2"),
             InlineKeyboardButton("⭐ 3", callback_data="rate_3"),
             InlineKeyboardButton("⭐ 4", callback_data="rate_4"),
             InlineKeyboardButton("⭐ 5", callback_data="rate_5"),
-        ]
-    ]
-    await update.message.reply_text("Пожалуйста, оцени ответ:", reply_markup=InlineKeyboardMarkup(keyboard))
+        ]]
+        await message.reply_text("Пожалуйста, оцени ответ:", reply_markup=InlineKeyboardMarkup(keyboard), reply_to_message_id=reply_msg.message_id)
+        return
+
+    # Пользователь отвечает на сообщение бота
+    if message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id:
+        keyboard = [[
+            InlineKeyboardButton("✅ Это мой ответ", callback_data="user_answer"),
+            InlineKeyboardButton("❓ Это наводящий вопрос", callback_data="follow_up"),
+        ]]
+        await message.reply_text("Как это трактовать?", reply_markup=InlineKeyboardMarkup(keyboard), reply_to_message_id=message.message_id)
 
 async def handle_rating_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -126,57 +129,56 @@ async def handle_rating_callback(update: Update, context: ContextTypes.DEFAULT_T
     rating = int(query.data.split("_")[1])
     question = context.user_data.get("last_question")
     answer = context.user_data.get("last_answer")
-    user_id = query.from_user.id
+    user_id = context.user_data.get("user_id")
+    username = context.user_data.get("username")
 
     if not question or not answer:
         await query.edit_message_text("Не удалось сохранить оценку.")
         return
 
     if rating >= 4:
-        save_chat_log(question, answer, rating, user_id=user_id)
+        save_chat_log(question, answer, rating, user_id=user_id, username=username)
         await query.edit_message_text(f"Спасибо за оценку {rating} ⭐️!")
+        context.user_data["state"] = "awaiting_reply"  # Переход к следующему шагу
     else:
-        context.user_data["awaiting_feedback"] = True
-        context.user_data["rating"] = rating
-        context.user_data["user_id"] = user_id
-        await query.edit_message_text(f"Спасибо за оценку {rating} ⭐️. Напиши, пожалуйста, что можно улучшить:")
+        await query.edit_message_text("Спасибо за оценку. Напиши, пожалуйста, что можно улучшить:")
 
-async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message
-    user_input = message.text
+async def handle_reply_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    action = query.data
 
-    # Если это reply на сообщение от бота — воспринимаем как уточнение
-    if message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id:
-        context.user_data["last_question"] = user_input
-        await handle_message(update, context)
-        return
-
-    # Если ожидается фидбэк
-    if context.user_data.get("awaiting_feedback"):
-        feedback = user_input
+    if action == "user_answer":
+        user_text = query.message.reply_to_message.text
         question = context.user_data.get("last_question")
-        answer = context.user_data.get("last_answer")
-        rating = context.user_data.get("rating", 3)
         user_id = context.user_data.get("user_id")
+        username = context.user_data.get("username")
+        save_chat_log(question, user_text, rating=5, user_id=user_id, username=username)
+        save_context_to_redis(f"[Оценка: 5] Ответ: {user_text}")
+        await query.edit_message_text("Спасибо! Ваш ответ сохранён ✅")
+        context.user_data["state"] = None
 
-        save_chat_log(question, answer, rating=rating, feedback=feedback, user_id=user_id)
-        await update.message.reply_text("Спасибо! Ваш отзыв сохранён")
-        context.user_data["awaiting_feedback"] = False
-        return
+    elif action == "follow_up":
+        await query.edit_message_text("Обрабатываю уточнение...")
+        fake_update = Update(update.update_id, message=query.message.reply_to_message)
+        await handle_user_message(update=fake_update, context=context)
 
-    # Иначе — обычный вопрос
-    await handle_message(update, context)
+async def setup_bot_commands(app):
+    await app.bot.set_my_commands([
+        BotCommand("start", "Начать"),
+        BotCommand("clear", "Очистить память"),
+    ])
 
 # === Запуск ===
-
 def main():
     token = parser.get("TELEGRAM", "BOT_TOKEN")
-    app = ApplicationBuilder().token(token).build()
+    app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("clear", clear))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback))
-    app.add_handler(CallbackQueryHandler(handle_rating_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
+    app.add_handler(CallbackQueryHandler(handle_rating_callback, pattern="rate_"))
+    app.add_handler(CallbackQueryHandler(handle_reply_action))
 
     app.run_polling()
 
