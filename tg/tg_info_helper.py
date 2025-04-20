@@ -42,9 +42,6 @@ def save_context_to_redis(context_text):
 def load_full_context():
     return "\n---\n".join(redis_client.lrange("context_memory", 0, -1))
 
-def clear_memory():
-    redis_client.delete("context_memory")
-
 def save_chat_log(question, answer, rating=5, feedback=None, user_id=None, username=None):
     log_entry = {
         "user_id": user_id,
@@ -67,11 +64,7 @@ def is_new_question(message):
     return message.reply_to_message is None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Я информационный помощник, спрашивай 📚")
-
-async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    clear_memory()
-    await update.message.reply_text("Память очищена.")
+    await update.message.reply_text("Я информационный помощник, чем помочь?")
 
 async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
@@ -79,8 +72,6 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Новый вопрос (без реплая)
     if is_new_question(message):
-        processing_msg = await message.reply_text("Обрабатываю вопрос...", reply_to_message_id=message.message_id)
-
         new_context = query_chromadb(user_input)
         full_context = load_full_context()
 
@@ -117,8 +108,8 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Пользователь отвечает на сообщение бота
     if message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id:
         keyboard = [[
-            InlineKeyboardButton("✅ Это мой ответ", callback_data="user_answer"),
-            InlineKeyboardButton("❓ Это наводящий вопрос", callback_data="follow_up"),
+            InlineKeyboardButton("Это мой ответ", callback_data="user_answer"),
+            InlineKeyboardButton("Это наводящий вопрос", callback_data="follow_up"),
         ]]
         await message.reply_text("Как это трактовать?", reply_markup=InlineKeyboardMarkup(keyboard), reply_to_message_id=message.message_id)
 
@@ -139,9 +130,10 @@ async def handle_rating_callback(update: Update, context: ContextTypes.DEFAULT_T
     if rating >= 4:
         save_chat_log(question, answer, rating, user_id=user_id, username=username)
         await query.edit_message_text(f"Спасибо за оценку {rating} ⭐️!")
-        context.user_data["state"] = "awaiting_reply"  # Переход к следующему шагу
+        context.user_data["state"] = "awaiting_reply"
     else:
-        await query.edit_message_text("Спасибо за оценку. Напиши, пожалуйста, что можно улучшить:")
+        await query.edit_message_text("Спасибо за оценку.")
+        context.user_data["state"] = None
 
 async def handle_reply_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -155,18 +147,16 @@ async def handle_reply_action(update: Update, context: ContextTypes.DEFAULT_TYPE
         username = context.user_data.get("username")
         save_chat_log(question, user_text, rating=5, user_id=user_id, username=username)
         save_context_to_redis(f"[Оценка: 5] Ответ: {user_text}")
-        await query.edit_message_text("Спасибо! Ваш ответ сохранён ✅")
+        await query.edit_message_text("Спасибо! Ваш ответ сохранён")
         context.user_data["state"] = None
 
     elif action == "follow_up":
-        await query.edit_message_text("Обрабатываю уточнение...")
         fake_update = Update(update.update_id, message=query.message.reply_to_message)
         await handle_user_message(update=fake_update, context=context)
 
 async def setup_bot_commands(app):
     await app.bot.set_my_commands([
-        BotCommand("start", "Начать"),
-        BotCommand("clear", "Очистить память"),
+        BotCommand("start", "Начать")
     ])
 
 # === Запуск ===
@@ -175,7 +165,6 @@ def main():
     app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("clear", clear))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
     app.add_handler(CallbackQueryHandler(handle_rating_callback, pattern="rate_"))
     app.add_handler(CallbackQueryHandler(handle_reply_action))
