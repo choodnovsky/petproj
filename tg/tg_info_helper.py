@@ -7,6 +7,15 @@ from configparser import ConfigParser
 import redis
 from datetime import datetime, timezone
 import json
+import logging
+from telegram.error import TelegramError
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logging.error(msg="Exception while handling an update:", exc_info=context.error)
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 
 # === Настройка ===
 parser = ConfigParser()
@@ -85,6 +94,9 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         response = ollama.chat(model="gemma:2b", messages=messages)
         answer = response["message"]["content"]
 
+        # Сохраняем в лог (независимо от оценки)
+        save_chat_log(user_input, answer, rating=0, user_id=message.from_user.id, username=message.from_user.full_name or message.from_user.username)
+
         context.user_data.update({
             "last_question": user_input,
             "last_answer": answer,
@@ -127,8 +139,10 @@ async def handle_rating_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text("Не удалось сохранить оценку.")
         return
 
+    # Обновляем лог с оценкой
+    save_chat_log(question, answer, rating=rating, user_id=user_id, username=username)
+
     if rating >= 4:
-        save_chat_log(question, answer, rating, user_id=user_id, username=username)
         await query.edit_message_text(f"Спасибо за оценку {rating} ⭐️!")
         context.user_data["state"] = "awaiting_reply"
     else:
@@ -168,6 +182,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
     app.add_handler(CallbackQueryHandler(handle_rating_callback, pattern="rate_"))
     app.add_handler(CallbackQueryHandler(handle_reply_action))
+    app.add_error_handler(error_handler)
 
     app.run_polling()
 
